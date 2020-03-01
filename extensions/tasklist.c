@@ -16,11 +16,22 @@ static const char *get_type_string(cmark_syntax_extension *extension, cmark_node
   return TYPE_STRING;
 }
 
-bool cmark_gfm_extensions_tasklist_state_is_checked(cmark_node *node) {
+
+// Return 1 if state was set, 0 otherwise
+int cmark_gfm_extensions_set_tasklist_item_checked(cmark_node *node, bool is_checked) {
+  // The node has to exist, and be an extension, and actually be the right type in order to get the value.
+  if (!node || !node->extension || strcmp(cmark_node_get_type_string(node), TYPE_STRING))
+    return 0;
+
+  node->as.list.checked = is_checked;
+  return 1;
+}
+
+bool cmark_gfm_extensions_get_tasklist_item_checked(cmark_node *node) {
   if (!node || !node->extension || strcmp(cmark_node_get_type_string(node), TYPE_STRING))
     return false;
 
-  if ((int)node->as.opaque == CMARK_TASKLIST_CHECKED) {
+  if (node->as.list.checked) {
     return true;
   }
   else {
@@ -78,11 +89,7 @@ static cmark_node *open_tasklist_item(cmark_syntax_extension *self,
   cmark_parser_advance_offset(parser, (char *)input, 3, false);
 
   // Either an upper or lower case X means the task is completed.
-  if (strstr((char*)input, "[x]") || strstr((char*)input, "[X]")) {
-    parent_container->as.opaque = (void *)CMARK_TASKLIST_CHECKED;
-  } else {
-    parent_container->as.opaque = (void *)CMARK_TASKLIST_NOCHECKED;
-  }
+  parent_container->as.list.checked = (strstr((char*)input, "[x]") || strstr((char*)input, "[X]"));
 
   return NULL;
 }
@@ -93,7 +100,7 @@ static void commonmark_render(cmark_syntax_extension *extension,
   bool entering = (ev_type == CMARK_EVENT_ENTER);
   if (entering) {
     renderer->cr(renderer);
-    if ((int)node->as.opaque == CMARK_TASKLIST_CHECKED) {
+    if (node->as.list.checked) {
       renderer->out(renderer, node, "- [x] ", false, LITERAL);
     } else {
       renderer->out(renderer, node, "- [ ] ", false, LITERAL);
@@ -114,7 +121,7 @@ static void html_render(cmark_syntax_extension *extension,
     cmark_strbuf_puts(renderer->html, "<li");
     cmark_html_render_sourcepos(node, renderer->html, options);
     cmark_strbuf_putc(renderer->html, '>');
-    if ((int)node->as.opaque == CMARK_TASKLIST_CHECKED) {
+    if (node->as.list.checked) {
       cmark_strbuf_puts(renderer->html, "<input type=\"checkbox\" checked=\"\" disabled=\"\" /> ");
     } else {
       cmark_strbuf_puts(renderer->html, "<input type=\"checkbox\" disabled=\"\" /> ");
@@ -126,7 +133,7 @@ static void html_render(cmark_syntax_extension *extension,
 
 static const char *xml_attr(cmark_syntax_extension *extension,
                             cmark_node *node) {
-  if ((int)node->as.opaque == CMARK_TASKLIST_CHECKED) {
+  if (node->as.list.checked) {
     return " completed=\"true\"";
   } else {
     return " completed=\"false\"";
